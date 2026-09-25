@@ -1,0 +1,130 @@
+name: QA staging rate-limit evidence
+
+on:
+  workflow_dispatch:
+
+jobs:
+  qa-staging:
+    runs-on: ubuntu-latest
+    environment: qa-staging
+    timeout-minutes: 8
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install -r requirements.txt
+      - name: Exercise isolated QA staging instance
+        env:
+          REDIS_URL: redis://127.0.0.1:6379/15
+        run: |
+          python - <<'PY'
+          import json
+          import time
+          from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+          from pathlib import Path
+          from threading import Event, Thread
+          from urllib.error import HTTPError
+          from urllib.request import urlopen
+
+          import app
+
+          alerts = []
+          delivered = Event()
+
+          class AlertReceiver(BaseHTTPRequestHandler):
+              def do_POST(self):
+                  body = self.rfile.read(int(self.headers['Content-Length']))
+                  alerts.append(json.loads(body))
+                  self.send_response(204)
+                  self.end_headers()
+                  delivered.set()
+
+              def log_message(self, *_args):
+                  pass
+
+          api = ThreadingHTTPServer(('127.0.0.1', 0), app.Handler)
+          receiver = ThreadingHTTPServer(('127.0.0.1', 0), AlertReceiver)
+          Thread(target=api.serve_forever, daemon=True).start()
+          Thread(target=receiver.serve_forever, daemon=True).start()
+          app.ALERT_WEBHOOK_URL = f'http://127.0.0.1:{receiver.server_port}/alerts'
+          app.ALERT_REJECTION_THRESHOLD = 10000
+          base = f'http://127.0.0.1:{api.server_port}'
+
+          def request(client):
+              try:
+                  with urlopen(f'{base}/api/requests?client_id={client}', timeout=3) as response:
+                      return response.status, response.headers.get('Retry-After')
+              except HTTPError as error:
+                  return error.code, error.headers.get('Retry-After')
+
+          try:
+              with urlopen(f'{base}/health', timeout=3) as response:
+                  assert response.status == 200
+
+              app.CLIENT.flushdb()  # This Redis service is private to this runner.
+              counts = {200: 0, 429: 0}
+              missing_retry_after = 0
+              start = time.monotonic()
+              for number in range(120):
+                  time.sleep(max(0, start + number - time.monotonic()))
+                  status, retry_after = request('sustained-qa-client')
+                  assert status in counts, f'unexpected HTTP {status}'
+                  counts[status] += 1
+                  if status == 429 and not retry_after:
+                      missing_retry_after += 1
+              duration = time.monotonic() - start
+              assert duration >= 119
+              assert counts[200] > 0 and counts[429] > 0
+              assert missing_retry_after == 0
+
+              app.CLIENT.flushdb()
+              app.ALERT_REJECTION_THRESHOLD = 10
+              first = [request('alert-qa-client') for _ in range(40)]
+              assert [status for status, _ in first].count(200) == 30
+              assert [status for status, _ in first].count(429) == 10
+              assert delivered.wait(5), 'alert webhook not delivered'
+              second = [request('second-qa-client') for _ in range(31)]
+              assert [status for status, _ in second].count(429) == 1
+              assert len(alerts) == 1, f'expected one alert, got {len(alerts)}'
+              assert alerts[0]['event'] == 'rate_limit_rejections_threshold'
+              assert alerts[0]['rejections'] == 10
+
+              with urlopen(f'{base}/health', timeout=3) as response:
+                  assert response.status == 200
+              result = {
+                  'environment': 'ephemeral GitHub Actions QA staging runner',
+                  'synthetic_only': True,
+                  'duration_seconds': round(duration, 1),
+                  'http_200': counts[200],
+                  'http_429': counts[429],
+                  'missing_retry_after': missing_retry_after,
+                  'alert_http_post_deliveries': len(alerts),
+                  'second_client_extra_rejections': 1,
+                  'customer_staging_or_production_deployment': False,
+              }
+              Path('qa-staging-evidence.json').write_text(
+                  json.dumps(result, indent=2, sort_keys=True) + '\n',
+                  encoding='utf-8',
+              )
+              print(json.dumps(result, sort_keys=True))
+          finally:
+              api.shutdown()
+              receiver.shutdown()
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: qa-staging-evidence
+          path: qa-staging-evidence.json
+          if-no-files-found: ignore

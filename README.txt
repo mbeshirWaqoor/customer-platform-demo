@@ -21,3 +21,8 @@ window. Set RATE_LIMIT_ALERT_WEBHOOK_URL to deliver the JSON alert by HTTP POST.
 If it is unset or delivery fails, the error is logged; API responses are not
 blocked by alert delivery. This demo does not configure an on-call owner or
 production monitoring destination.
+
+The manually dispatched GitHub Actions QA staging workflow exercises an
+ephemeral runner with its own Redis service for 120 seconds and records a
+synthetic evidence artifact. It is not a customer staging deployment, an
+on-call alert destination, or a production release approval.
