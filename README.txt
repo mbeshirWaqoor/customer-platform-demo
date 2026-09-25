@@ -14,3 +14,10 @@ GET /api/requests?client_id=demo exercises the limit.
 
 The Redis URL may be overridden with REDIS_URL. No staging or production
 deployment is implied by commits or pull requests in this repository.
+
+Rate-limit rejection alerts are logged once the shared rejection counter
+reaches RATE_LIMIT_ALERT_REJECTIONS (default: 10) within the configured Redis
+window. Set RATE_LIMIT_ALERT_WEBHOOK_URL to deliver the JSON alert by HTTP POST.
+If it is unset or delivery fails, the error is logged; API responses are not
+blocked by alert delivery. This demo does not configure an on-call owner or
+production monitoring destination.
