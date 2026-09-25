@@ -1,0 +1,35 @@
+Customer Platform — isolated QA Redis migration/rollback observation
+===================================================================
+
+Scope: local synthetic exercise on 2026-09-25 around 15:34–15:37 UTC.
+This was not a customer staging/production migration and did not validate
+the customer's real backup, traffic, monitoring, or recovery procedures.
+
+Environment: customer-platform-demo/app.py; two isolated redis:7-alpine
+instances on localhost ports 16379 (old) and 16380 (new); a task-specific
+Docker volume for the old Redis RDB. No existing Redis service was changed.
+
+1. Both Redis instances answered PONG and were running on their expected
+   loopback ports.
+2. A synthetic expiring marker was written to old Redis. SAVE returned OK;
+   /data/dump.rdb existed (144 bytes), the marker was present, and its TTL
+   was positive.
+3. Redis DUMP/RESTORE copied the marker to new Redis with its remaining TTL.
+   Both values were identical. RESTORE returned OK.
+4. The QA app, pointed at new Redis, returned HTTP 200 on /health and HTTP
+   200 on /api/requests?client_id=qa_migration.
+5. The old Redis container was stopped, then a recovery instance was started
+   from the same task-specific volume. Its startup log reported an RDB load
+   with 1 key and 0 expired keys; the original marker read pre-migration.
+6. The QA app, pointed back at recovered old Redis, returned HTTP 200 on
+   /health and HTTP 200 on /api/requests?client_id=qa_rollback.
+7. The qa_migration request key existed only on new Redis, not recovered old
+   Redis, confirming the two paths were distinct.
+
+The QA app processes and task-specific Redis containers were stopped. The
+task-specific Docker volume, containing only synthetic QA data, was removed.
+
+Conclusion: this demonstrates a local synthetic backup, data copy, restart
+recovery, and application rollback path. It is partial SEC-03 evidence only.
+SEC-03 remains open pending real staging migration/backup/rollback evidence
+and the required recovery behavior and monitoring checks.

@@ -1,0 +1,23 @@
+Customer Platform — QA rate-limit observation
+=============================================
+
+Scope: isolated local QA exercise using customer-platform-demo/app.py and
+redis:7-alpine on 127.0.0.1. This is not a customer staging or production
+deployment, and it does not establish the expected customer release traffic
+profile.
+
+Window: 2026-09-25 15:26:20–15:28:20 UTC (120 seconds).
+Configured limit: 30 requests per client per 60-second window.
+Traffic: 120 GET /api/requests requests, one per second, one unique synthetic
+client ID.
+
+Observed HTTP 200: 60.
+Observed HTTP 429: 60.
+Missing Retry-After on HTTP 429: 0.
+Transport errors: 0.
+GET /health at completion: HTTP 200, {"status": "ok"}.
+
+This demonstrates the configured limiter and Retry-After behavior across two
+local QA windows. No alerting path was configured or observed. SEC-02 remains
+open until the expected release traffic profile and alert behavior are
+validated in the appropriate staging environment.

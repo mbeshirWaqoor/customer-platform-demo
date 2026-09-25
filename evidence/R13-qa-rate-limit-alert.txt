@@ -1,0 +1,35 @@
+Customer Platform — local QA rate-limit alert observation
+=========================================================
+
+Scope: isolated local QA exercise on 2026-09-25 around 15:45–15:46 UTC.
+This was not customer staging or production, did not use a customer traffic
+profile, and did not notify an on-call owner.
+
+Environment: customer-platform-demo/app.py, a task-specific redis:7-alpine
+container on 127.0.0.1:16381, the app on 127.0.0.1:18081, and a local HTTP
+alert receiver on 127.0.0.1:18082. Configured limit: 30 requests per client
+per 60-second window. Alert threshold: 10 rejected requests in the shared
+Redis window. The webhook destination was the local receiver only.
+
+First synthetic client: 40 requests yielded 30 HTTP 200 and 10 HTTP 429.
+Missing Retry-After on 429: 0. GET /health returned HTTP 200.
+
+At rejection 10, app output included one structured rate_limit_alert event.
+The local receiver printed one POST /alerts with the JSON event, rejection
+count 10, threshold 10, and window 60 seconds; it returned HTTP 204. The
+app printed rate_limit_alert_delivered.
+
+Second synthetic client: 31 requests yielded 30 HTTP 200 and 1 HTTP 429.
+The shared Redis rejection counter read 11; no second webhook event appeared
+in the same window. Thus the threshold crossed once for both clients together.
+
+Both local server sessions were stopped with Ctrl+C (their final
+KeyboardInterrupt exit status is expected for the manual stop). The
+task-specific Redis container was stopped and removed. No QA ports remained
+listening.
+
+Conclusion: the configured limiter, Retry-After, shared rejection threshold,
+and local webhook delivery were observed in QA. This is partial SEC-02
+evidence only. SEC-02 remains open until the expected customer release traffic
+profile and the staging alert destination, ownership, and escalation behavior
+are validated and documented.
