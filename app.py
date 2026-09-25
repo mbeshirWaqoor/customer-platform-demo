@@ -99,7 +99,8 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if DEMO_API_KEY and not hmac.compare_digest(
-            self.headers.get("X-Demo-Key", ""), DEMO_API_KEY
+            self.headers.get("X-Demo-Key", "").encode("utf-8"),
+            DEMO_API_KEY.encode("utf-8"),
         ):
             self.send_json(401, {"error": "unauthorized"})
             return
