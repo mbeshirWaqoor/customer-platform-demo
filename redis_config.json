@@ -1,6 +1,6 @@
 {
-  "url": "redis://localhost:6379/0",
-  "connect_timeout_seconds": 1,
+  "url": "redis://localhost:6379/15",
+  "connect_timeout_seconds": 2,
   "rate_limit_window_seconds": 60,
   "rate_limit_requests": 30
 }
