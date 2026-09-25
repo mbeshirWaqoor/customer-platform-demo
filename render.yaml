@@ -1,0 +1,26 @@
+services:
+  - type: keyvalue
+    name: customer-platform-demo-redis
+    region: frankfurt
+    plan: free
+    ipAllowList: []
+    maxmemoryPolicy: noeviction
+  - type: web
+    name: customer-platform-demo-qa
+    runtime: python
+    region: frankfurt
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
+      - key: REDIS_URL
+        fromService:
+          name: customer-platform-demo-redis
+          type: keyvalue
+          property: connectionString
+      - key: DEMO_API_KEY
+        generateValue: true

@@ -1,6 +1,7 @@
 """Small customer-platform API used only for the LigoFlow release scenario."""
 
 import json
+import hmac
 import logging
 import os
 from threading import Thread
@@ -19,6 +20,7 @@ ALERT_REJECTION_THRESHOLD = int(os.getenv("RATE_LIMIT_ALERT_REJECTIONS", "10"))
 if ALERT_REJECTION_THRESHOLD < 1:
     raise ValueError("RATE_LIMIT_ALERT_REJECTIONS must be positive")
 ALERT_WEBHOOK_URL = os.getenv("RATE_LIMIT_ALERT_WEBHOOK_URL", "").strip()
+DEMO_API_KEY = os.getenv("DEMO_API_KEY", "")
 CLIENT = redis.Redis.from_url(
     os.getenv("REDIS_URL", CONFIG["url"]),
     socket_connect_timeout=CONFIG["connect_timeout_seconds"],
@@ -96,6 +98,12 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(404, {"error": "not_found"})
             return
 
+        if DEMO_API_KEY and not hmac.compare_digest(
+            self.headers.get("X-Demo-Key", ""), DEMO_API_KEY
+        ):
+            self.send_json(401, {"error": "unauthorized"})
+            return
+
         client_id = parse_qs(request.query).get("client_id", [""])[0]
         if not client_id or len(client_id) > 64 or not all(
             character.isascii() and (character.isalnum() or character in "_-")
@@ -130,5 +138,6 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    host = os.getenv("HOST", "127.0.0.1")
     port = int(os.getenv("PORT", "8080"))
-    ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()
+    ThreadingHTTPServer((host, port), Handler).serve_forever()
