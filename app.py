@@ -54,7 +54,7 @@ class Handler(BaseHTTPRequestHandler):
         ):
             self.send_json(400, {"error": "invalid_client_id"})
             return
-        key = f"limit:{client_id}"
+        key = f"customer-platform-demo:limit:{client_id}"
         try:
             count, ttl = CLIENT.eval(
                 LIMIT_SCRIPT, 1, key, CONFIG["rate_limit_window_seconds"]
