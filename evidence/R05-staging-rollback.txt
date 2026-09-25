@@ -1,0 +1,26 @@
+R05 local staging rehearsal - 25 September 2026 (Africa/Cairo, UTC+3)
+==================================================
+
+Scope: the customer-platform-demo test service on 127.0.0.1:18080. This was
+not a customer or production deployment. The existing local Redis listener
+was used with dedicated, initially empty logical databases 15 and 14. No
+LigoFlow application keys were read or changed.
+
+Candidate revision: a968da6a63e63aa5a6dc00908cec62d37318eba4
+Redis connection: redis://localhost:6379/15 from redis_config.json
+Observed at 07:57:54 local time:
+  GET /health                                      HTTP 200, status=ok
+  GET /api/requests?client_id=release-demo-r05    HTTP 200, status=accepted
+
+Previous revision: c007b9d1a1c718424da470930c99e3e52fd5b387
+Rollback safety override: REDIS_URL=redis://localhost:6379/14
+The override kept this test away from database 0 in the previous revision.
+Observed at 07:58:38 local time after stopping the candidate and starting the
+previous revision:
+  GET /health                                               HTTP 200, status=ok
+  GET /api/requests?client_id=release-demo-r05-rollback      HTTP 200, status=accepted
+
+Both server processes were stopped after their observations. The previous
+code revision returned service without an observed error. This verifies a
+local code rollback and isolated Redis connections; it does not verify a
+production migration, sustained-load behavior, or copying Redis state.
