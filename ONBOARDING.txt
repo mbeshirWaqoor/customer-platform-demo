@@ -1,0 +1,25 @@
+Customer Platform Demo — onboarding guide
+25 September 2026
+
+This guide is for the local release-scenario demo, not a customer production
+environment. No real customer data or credentials are required.
+
+What the demo provides
+- GET /health checks whether the configured Redis connection is reachable.
+- GET /api/requests?client_id=<id> exercises a Redis-backed request limit.
+  The ID must be 1–64 ASCII letters, digits, underscores, or hyphens.
+- The current configured limit is 30 requests per 60 seconds for each ID.
+  A request over the limit returns HTTP 429 with Retry-After.
+
+Local setup
+1. Supply an isolated Redis endpoint. The repository's default uses local
+   database 15; set REDIS_URL to a separate approved test endpoint if needed.
+2. Install the packages in requirements.txt and run app.py with Python.
+   The server binds to 127.0.0.1 and defaults to port 8080 (PORT overrides it).
+3. Open /health and confirm HTTP 200 before trying /api/requests with a
+   throwaway client_id such as onboarding-demo.
+
+If /health returns 503, check the test Redis endpoint and configuration.
+Do not copy production tokens or customer identifiers into demo requests.
+
+This file has been prepared locally. It has not been sent to a customer.
